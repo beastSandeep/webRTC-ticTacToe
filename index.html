@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WebRTC Tic Tac Toe</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-100 flex items-center justify-center min-h-screen">
+    <div class="max-w-lg w-full p-6 bg-white shadow-md rounded-md">
+      <h1 class="text-2xl font-bold text-center mb-4">
+        Tic Tac Toe with WebRTC
+      </h1>
+
+      <!-- Connection Section -->
+      <div id="connection-section">
+        <p class="text-gray-700 text-center mb-4">
+          <strong>Player 1:</strong> Start the game and share the link.<br />
+          <strong>Player 2:</strong> Paste the link to join.
+        </p>
+
+        <!-- Player 1 -->
+        <button
+          id="start-game"
+          class="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 mb-4"
+        >
+          Start Game
+        </button>
+
+        <textarea
+          id="game-link"
+          class="w-full border border-gray-300 rounded p-2 hidden"
+          placeholder="Share this link with Player 2"
+        ></textarea>
+
+        <!-- Player 2 -->
+        <input
+          id="join-game-link"
+          class="w-full border border-gray-300 rounded p-2 mb-2"
+          placeholder="Paste game link here to join"
+        />
+        <button
+          id="join-game"
+          class="w-full bg-green-500 text-white py-2 rounded hover:bg-green-600"
+        >
+          Join Game
+        </button>
+      </div>
+
+      <!-- Game Section -->
+      <div id="game-section" class="hidden">
+        <h2 id="player-turn" class="text-lg font-semibold text-center mb-4">
+          Waiting for connection...
+        </h2>
+        <div class="grid grid-cols-3 gap-2">
+          <button
+            class="cell w-20 h-20 bg-gray-200 text-2xl font-bold flex items-center justify-center"
+          ></button>
+          <button
+            class="cell w-20 h-20 bg-gray-200 text-2xl font-bold flex items-center justify-center"
+          ></button>
+          <button
+            class="cell w-20 h-20 bg-gray-200 text-2xl font-bold flex items-center justify-center"
+          ></button>
+          <button
+            class="cell w-20 h-20 bg-gray-200 text-2xl font-bold flex items-center justify-center"
+          ></button>
+          <button
+            class="cell w-20 h-20 bg-gray-200 text-2xl font-bold flex items-center justify-center"
+          ></button>
+          <button
+            class="cell w-20 h-20 bg-gray-200 text-2xl font-bold flex items-center justify-center"
+          ></button>
+          <button
+            class="cell w-20 h-20 bg-gray-200 text-2xl font-bold flex items-center justify-center"
+          ></button>
+          <button
+            class="cell w-20 h-20 bg-gray-200 text-2xl font-bold flex items-center justify-center"
+          ></button>
+          <button
+            class="cell w-20 h-20 bg-gray-200 text-2xl font-bold flex items-center justify-center"
+          ></button>
+        </div>
+        <button
+          id="restart"
+          class="mt-4 bg-red-500 text-white py-2 rounded w-full hidden"
+        >
+          Restart Game
+        </button>
+      </div>
+    </div>
+
+    <script>
+      // WebRTC variables
+      const peerConnection = new RTCPeerConnection();
+      let dataChannel;
+      let playerSymbol = "X"; // Player 1 is X, Player 2 is O
+      let isMyTurn = false; // Player 1 starts the game
+      let gameState = Array(9).fill(null);
+
+      // DOM Elements
+      const connectionSection = document.getElementById("connection-section");
+      const gameSection = document.getElementById("game-section");
+      const startGameButton = document.getElementById("start-game");
+      const gameLinkTextarea = document.getElementById("game-link");
+      const joinGameLinkInput = document.getElementById("join-game-link");
+      const joinGameButton = document.getElementById("join-game");
+      const cells = document.querySelectorAll(".cell");
+      const playerTurnLabel = document.getElementById("player-turn");
+      const restartButton = document.getElementById("restart");
+
+      // Utility: Check for winner
+      const checkWinner = () => {
+        const winPatterns = [
+          [0, 1, 2],
+          [3, 4, 5],
+          [6, 7, 8], // Rows
+          [0, 3, 6],
+          [1, 4, 7],
+          [2, 5, 8], // Columns
+          [0, 4, 8],
+          [2, 4, 6], // Diagonals
+        ];
+
+        for (let pattern of winPatterns) {
+          const [a, b, c] = pattern;
+          if (
+            gameState[a] &&
+            gameState[a] === gameState[b] &&
+            gameState[a] === gameState[c]
+          ) {
+            return gameState[a];
+          }
+        }
+        return gameState.includes(null) ? null : "Draw";
+      };
+
+      // Update the game board
+      const updateBoard = () => {
+        cells.forEach((cell, index) => {
+          cell.textContent = gameState[index];
+        });
+
+        const winner = checkWinner();
+        if (winner) {
+          playerTurnLabel.textContent =
+            winner === "Draw" ? "It's a Draw!" : `${winner} Wins!`;
+          restartButton.classList.remove("hidden");
+          isMyTurn = false; // Disable further moves after the game ends
+        } else {
+          playerTurnLabel.textContent = isMyTurn
+            ? "Your Turn"
+            : "Opponent's Turn";
+        }
+      };
+
+      // Reset game state and UI
+      const resetGame = (isStartingPlayer) => {
+        gameState = Array(9).fill(null);
+        isMyTurn = isStartingPlayer === (playerSymbol === "X");
+        updateBoard();
+        restartButton.classList.add("hidden");
+        playerTurnLabel.textContent = isMyTurn
+          ? "Your Turn"
+          : "Opponent's Turn";
+      };
+
+      // Handle cell clicks
+      cells.forEach((cell, index) => {
+        cell.addEventListener("click", () => {
+          if (isMyTurn && !gameState[index]) {
+            gameState[index] = playerSymbol;
+            isMyTurn = false;
+            updateBoard();
+
+            // Send move to opponent
+            dataChannel.send(JSON.stringify({ type: "move", gameState }));
+          }
+        });
+      });
+
+      // Restart the game (player-side logic)
+      restartButton.addEventListener("click", () => {
+        // Player requesting restart assigns the new starting player
+        const newStartingPlayer = playerSymbol === "X";
+        resetGame(newStartingPlayer); // Player X starts initially
+        dataChannel.send(
+          JSON.stringify({ type: "restart", startingPlayer: newStartingPlayer })
+        );
+      });
+
+      // WebRTC data channel setup
+      const setupDataChannel = (channel) => {
+        dataChannel = channel;
+
+        dataChannel.onmessage = (event) => {
+          const message = JSON.parse(event.data);
+
+          if (message.type === "move") {
+            gameState = message.gameState;
+            isMyTurn = true; // Opponent moved, now it's your turn
+            updateBoard();
+          } else if (message.type === "restart") {
+            resetGame(message.startingPlayer); // Synchronize starting player
+          }
+        };
+
+        dataChannel.onopen = () => {
+          connectionSection.classList.add("hidden");
+          gameSection.classList.remove("hidden");
+          playerTurnLabel.textContent = isMyTurn
+            ? "Your Turn"
+            : "Opponent's Turn";
+        };
+      };
+
+      // Player 1: Start the game
+      startGameButton.addEventListener("click", async () => {
+        dataChannel = peerConnection.createDataChannel("game");
+        setupDataChannel(dataChannel);
+
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+
+        gameLinkTextarea.value = JSON.stringify(
+          peerConnection.localDescription
+        );
+        gameLinkTextarea.classList.remove("hidden");
+        playerSymbol = "X"; // Player 1 is X
+        isMyTurn = true; // Player 1 starts
+      });
+
+      // Player 2: Join the game
+      joinGameButton.addEventListener("click", async () => {
+        const offer = JSON.parse(joinGameLinkInput.value);
+        await peerConnection.setRemoteDescription(offer);
+
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+
+        peerConnection.ondatachannel = (event) =>
+          setupDataChannel(event.channel);
+
+        gameLinkTextarea.value = JSON.stringify(
+          peerConnection.localDescription
+        );
+        gameLinkTextarea.classList.remove("hidden");
+
+        playerSymbol = "O"; // Player 2 is O
+        isMyTurn = false; // Player 1 starts, so Player 2 waits
+      });
+
+      // Handle ICE candidates
+      peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+          gameLinkTextarea.value = JSON.stringify(
+            peerConnection.localDescription
+          );
+        }
+      };
+    </script>
+  </body>
+</html>
